@@ -4,8 +4,15 @@ const app = express();
 // To allow POST requests
 const multer = require("multer");
 
+// for application/x-www-form-urlencoded
+app.use(express.urlencoded({extended: true})); // built-in middleware
+// for application/json
+app.use(express.json()); // built-in middleware
+// for multipart/form-data (required with FormData)
+app.use(multer().none()); // requires the "multer" module
 
-const port = 8000
+// listening on...
+const port = 8000;
 
 // URL to access AirLabs API
 const AIRLABS_URL = "";
@@ -28,18 +35,14 @@ const SERVER_ERROR_MSG =
  * }
  */
 app.post("/flights", (req, res) => {
-    console.log("in post");
     let origin = req.body.origin;
+    let dest = req.body.dest;
+    let date = req.body.date;
 
-    res.send(origin);
+    getFlightData(origin, dest, date);
 
-    // let dest = req.body.dest;
-    // let date = req.body.date;
-
-    // getFlightData(origin, dest, date);
-
-    // res.send("Flights from: " + origin + " to: " + dest + " on: " + date + " are ");
-})
+    res.send("Flights from " + origin + " to " + dest + " on " + date + " are ");
+});
 
 /**
  * Queries flight data API to get the flights from origin to dest
@@ -49,7 +52,7 @@ app.post("/flights", (req, res) => {
  * @param {String} dest
  */
 async function getFlightData(origin, dest, date) {
-
+    
 }
 
 app.listen(port, () => {
