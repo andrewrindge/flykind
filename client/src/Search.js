@@ -2,34 +2,36 @@ import React, {useState} from 'react';
 
 // Component containing search functionality:
 // Origin & Dest Dropdown options, and date of flight
-function Search() {
-    const [flights, setFlights] = React.useState({});
+function Search({updateResults}) {
+    // const [flights, setFlights] = React.useState({});
 
     // Calls functions to get new
     function getFlights(e) {
+        // Keep submit from reloading page
         e.preventDefault();
+
+        // Grab data from input fields to be passed to api call
         const data = new FormData();
         let form = document.querySelectorAll("input");
         for (let i = 0; i < form.length - 1; i++) {
-            console.log(form[i]);
             data.append(form[i].name, form[i].value)
         }
-        console.log(data);
 
+        // Get flight info
         fetch("http://localhost:8000/flights", {method: "POST", body: data})
             .then(response => {
                 if (response.ok) {
-                    return response;
+                    return response.json();
                 }
                 throw response;
             })
             .then(data => {
-                setFlights(data);
+                updateResults(data);
             })
             .catch(console.error);
-        // e.preventDefault();
     };
 
+    // Render search area component
     return (
         <form onSubmit={getFlights}>
             <label>
