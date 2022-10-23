@@ -1,5 +1,7 @@
 const express = require('express');
 const app = express();
+const sqlite3 = require('sqlite3');
+const sqlite = require('sqlite');
 
 // Running locally in development, so need to bypass corrs
 app.use(function(req, res, next) {
@@ -91,7 +93,7 @@ function parseFlightsData(flightsResponse){
     let data = flightsResponse["data"];
 
     // Create a new object to hold just the data we need
-    let price, time, carrier, plane, departure, arrival;
+    let price, time, carrier, plane, departure, arrival, co2;
     let flights = [];
     // go through data[] & look at each flight offer
     for (let i = 0; i < data.length; i++) {
@@ -123,6 +125,34 @@ function parseFlightsData(flightsResponse){
     console.log(flights);
     return(flights);
 }
+
+async function getDBConnection(database) {
+    const db = await sqlite.open({
+      filename: database,
+      driver: sqlite3.Database
+    });
+    return db;
+} 
+
+//SQLite query for aircraft name from abbr
+SELECT AC.aircraftname 
+FROM aircraftcodes AS AC
+WHERE AC.abbr = (...);
+
+//SQLite query for emission rates from aircraft name
+SELECT E.emissions
+FROM aircraftemissions AS E
+WHERE E.aircraftmodel = (...);
+
+//SQLite query for coordinates of one airport
+SELECT AP.latitude, AP.longitude, AP.altitude
+FROM airportcodes AS AP
+WHERE AP.abbr = (...);
+
+//SQLite query for coordinates of one airport
+SELECT AP.airportname
+FROM airportcodes AS AP
+WHERE AP.abbr = (...);
 
 app.listen(port, () => {
     console.log(`listening on port ${port}`)
