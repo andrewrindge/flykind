@@ -117,7 +117,9 @@ function parseFlightsData(flightsResponse){
             carrierCode:carrier,
             aircraftCode:plane,
             departureAirportCodes:departure,
-            arrivalAirportCodes:arrival
+            arrivalAirportCodes:arrival,
+            airports:[],
+            emissions:0,
         };
         //Flights should be an array of json objects
         flights.push(flight);
@@ -126,33 +128,85 @@ function parseFlightsData(flightsResponse){
     return(flights);
 }
 
+/**
+ * Calculate CO2 emissions for a given flight
+ *
+ * @param {object} flight object containing data to calculate emissions
+ */
+async function calculateFlightEmissions(flight){
+    // Get paramaters from sql data matching flight codes
+    let aircrafts = flight.aircraftCode;
+    let depart = flight.departureAirportCodes;
+    let arrive = flight.arrivalAirportCodes;
+    let totalEmissions;
+
+    // go thorough each segment of the flight
+    // (aircrafts, depart, and arrive should all be the same length)
+    for (let i = 0; i < aircrafts.length; i++) {
+        let db = await getDBConnection("airportcodes.db");
+            // SQLite query for name of airport from code
+            let airportName = await db.all("SELECT AP.airportname FROM airportcodes AS AP WHERE AP.abbr = (...);");
+            flights.airports.push(airportName);
+
+            // Get distance between airports for segment
+            let arrCoords = await db.all("SELECT AP.latitude, AP.longitude FROM airportcodes AS AP WHERE AP.abbr = ?;", arrive[i]);
+            let depCoords = await db.all("SELECT AP.latitude, AP.longitude FROM airportcodes AS AP WHERE AP.abbr = ?;", depart[i]);
+            let dist = getDistanceFromLatLonInKm(aarCoords.latitude, arrCoords.longitude, depCoords.latitude, depCoords.longitude);
+        db.close();
+
+        db = await getDBConnection("aircraftcodes.db");
+            // SQLite query for aircraft name from abbr
+            let aircraftName = await db.all("SELECT AC.aircraftname FROM aircraftcodes AS AC WHERE AC.abbr = ?;", aircrafts[i]);
+        db.close();
+
+        db = await getDBConnection("aircraftemissions.db");
+            // SQLite query for emission rates from aircraft name
+            let aircraftEmissions = await db.all("SELECT E.emissions FROM aircraftemissions AS E WHERE E.aircraftmodel = ?;", aircraftName);
+        db.close();
+
+        totalEmissions += emissionsForSegment(dist, aircraftEmissions);
+    }
+    // add additional carbon pieces (taxiing, etc.)
+    // update flights with new data (add arrays we created + emissions)
+}
+
+/**
+ *
+ * @param {Integer} distance
+ * @param {String} aircraftEmissions
+ */
+function emissionsForSegment (distance, aircraftEmissions) {
+    // parse aircraft emissions
+    // do *
+    // return
+}
+
 async function getDBConnection(database) {
     const db = await sqlite.open({
       filename: database,
       driver: sqlite3.Database
     });
     return db;
-} 
+}
 
-//SQLite query for aircraft name from abbr
-SELECT AC.aircraftname 
-FROM aircraftcodes AS AC
-WHERE AC.abbr = (...);
+// https://stackoverflow.com/questions/27928/calculate-distance-between-two-latitude-longitude-points-haversine-formula
+function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
+    var R = 6371; // Radius of the earth in km
+    var dLat = deg2rad(lat2-lat1);
+    var dLon = deg2rad(lon2-lon1);
+    var a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon/2) * Math.sin(dLon/2)
+    ;
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    var d = R * c; // Distance in km
+    return d;
+}
 
-//SQLite query for emission rates from aircraft name
-SELECT E.emissions
-FROM aircraftemissions AS E
-WHERE E.aircraftmodel = (...);
-
-//SQLite query for coordinates of one airport
-SELECT AP.latitude, AP.longitude, AP.altitude
-FROM airportcodes AS AP
-WHERE AP.abbr = (...);
-
-//SQLite query for coordinates of one airport
-SELECT AP.airportname
-FROM airportcodes AS AP
-WHERE AP.abbr = (...);
+function deg2rad(deg) {
+    return deg * (Math.PI/180)
+}
 
 app.listen(port, () => {
     console.log(`listening on port ${port}`)
