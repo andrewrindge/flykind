@@ -45,10 +45,11 @@ app.post("/flights", async (req, res) => {
     let dest = req.body.dest;
     let date = req.body.date;
 
-    let data = await getFlightData(origin, dest, date);
-    res.send(data);
+    let flightData = await getFlightData(origin, dest, date);
+    // console.log(flightData);
 
-    // res.send("Flights from " + origin + " to " + dest + " on " + date + " are ");
+
+    res.send("finished getting data");
 });
 
 /**
@@ -63,17 +64,48 @@ async function getFlightData(origin, dest, date) {
     await amadeus.client.get(
         '/v2/shopping/flight-offers',
         {
-            originLocationCode: 'SYD',
-            destinationLocationCode: 'BKK',
-            departureDate: '2022-11-10',
+            originLocationCode: origin,
+            destinationLocationCode: dest,
+            departureDate: date,
             adults: '1'
-        }
-    ).then(function(response){
-        console.log(response);
-        return response;
-    }).catch(function(err) {
+        })
+    // .then(res => res.json())
+    .then(function(res){
+        return parseFlightsData(res);
+    })
+    .catch(function(err) {
         console.log(err);
     });
+}
+
+/**
+ * Parses data into those useful for
+ *
+ * @param {JSON} response from api call: for flights from origin->dest on date
+ *               as given by user
+ */
+function parseFlightsData(flightsResponse){
+    let data = flightsResponse["data"];
+    // currently this isn't working v
+    let dictionary = data["dictionaries"];
+    console.log(dictionary)
+    return data;
+
+    // parse the dictionary (in helper funct) to create a single searchable
+    // object with aircrafts and carriers (the only components we should use)
+
+    // Create a new object to hold just the data we need
+
+    // go through data[] & look at each flight offer
+    // for (let i = 0; i < data.size(); i++) {
+        // For each flight collect:
+        // - price.grandTotal
+        // - numberOfBookableSeat ?
+        // - itineraries.duration,
+        // - itineraries.(for each in)segments.carrierCode (airline),
+        // - itineraries.(for each in)segments.aircraft.code
+            // for (let j = 0; j < segments.size(); j++) {}
+    // }
 }
 
 app.listen(port, () => {
