@@ -21,9 +21,6 @@ var amadeus = new Amadeus({
 // listening on...
 const port = 8000;
 
-// URL to access AirLabs API
-const AIRLABS_URL = "";
-
 // Error message constants
 const USER_ERROR = 400;
 const PARAMS_ERROR_MSG = "Missing or incorrect paramater(s)."
@@ -46,10 +43,9 @@ app.post("/flights", async (req, res) => {
     let date = req.body.date;
 
     let flightData = await getFlightData(origin, dest, date);
-    // console.log(flightData);
+    console.log(flightData);
 
-
-    res.send("finished getting data");
+    res.send(flightData);
 });
 
 /**
@@ -61,7 +57,7 @@ app.post("/flights", async (req, res) => {
  * @param {String} date of flight request
  */
 async function getFlightData(origin, dest, date) {
-    await amadeus.client.get(
+    amadeus.client.get(
         '/v2/shopping/flight-offers',
         {
             originLocationCode: origin,
@@ -71,7 +67,9 @@ async function getFlightData(origin, dest, date) {
         })
     // .then(res => res.json())
     .then(function(res){
-        return parseFlightsData(res);
+        let flights = parseFlightsData(res);
+        console.log(flights);
+        return flights;
     })
     .catch(function(err) {
         console.log(err);
@@ -87,25 +85,45 @@ async function getFlightData(origin, dest, date) {
 function parseFlightsData(flightsResponse){
     let data = flightsResponse["data"];
     // currently this isn't working v
-    let dictionary = data["dictionaries"];
-    console.log(dictionary)
-    return data;
+    let dictionary = flightsResponse["dictionaries"];
+    //console.log(data);
+    //return data;
 
     // parse the dictionary (in helper funct) to create a single searchable
     // object with aircrafts and carriers (the only components we should use)
 
     // Create a new object to hold just the data we need
-
+    let price, time, carrier, plane, departure, arrival;
+    let flights = [];
     // go through data[] & look at each flight offer
-    // for (let i = 0; i < data.size(); i++) {
-        // For each flight collect:
-        // - price.grandTotal
-        // - numberOfBookableSeat ?
-        // - itineraries.duration,
-        // - itineraries.(for each in)segments.carrierCode (airline),
-        // - itineraries.(for each in)segments.aircraft.code
-            // for (let j = 0; j < segments.size(); j++) {}
-    // }
+    for (let i = 0; i < data.length; i++) {
+        price = data[i]["price"]["total"];
+        carrier = [];
+        plane = [];
+        departure = [];
+        arrival = [];
+        for(let j = 0; j < (data[i]["itineraries"]).length; j++) {
+            time = data[i]["itineraries"][j]["duration"];
+            for(let k = 0; k < (data[i]["itineraries"][j]["segments"]).length; k++) {
+                departure.push(data[i]["itineraries"][j]["segments"][k]["departure"]["iataCode"]);
+                arrival.push(data[i]["itineraries"][j]["segments"][k]["arrival"]["iataCode"]);
+                carrier.push(data[i]["itineraries"][j]["segments"][k]["carrierCode"]);
+                plane.push(data[i]["itineraries"][j]["segments"][k]["aircraft"]["code"]);
+            }
+        }
+        const flight = {
+            totalPrice:price,  
+            totalDuration:time, 
+            carrierCode:carrier, 
+            aircraftCode:plane,
+            departureAirportCodes:departure,
+            arrivalAirportCodes:arrival
+        };
+        //Flights should be an array of json objects
+        flights.push(flight);
+    }
+    console.log(flights);
+    return(flights);
 }
 
 app.listen(port, () => {
