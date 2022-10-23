@@ -1,6 +1,13 @@
 const express = require('express');
 const app = express();
 
+// Running locally in development, so need to bypass corrs
+app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
+
 // To allow POST requests
 const multer = require("multer");
 
@@ -43,7 +50,6 @@ app.post("/flights", async (req, res) => {
     let date = req.body.date;
 
     let flightData = await getFlightData(origin, dest, date);
-    console.log(flightData);
 
     res.send(flightData);
 });
@@ -112,9 +118,9 @@ function parseFlightsData(flightsResponse){
             }
         }
         const flight = {
-            totalPrice:price,  
-            totalDuration:time, 
-            carrierCode:carrier, 
+            totalPrice:price,
+            totalDuration:time,
+            carrierCode:carrier,
             aircraftCode:plane,
             departureAirportCodes:departure,
             arrivalAirportCodes:arrival
