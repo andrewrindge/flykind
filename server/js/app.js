@@ -1,7 +1,9 @@
 const express = require('express');
 const app = express();
-const sqlite3 = require('sqlite3');
+
+// Allow sql database access
 const sqlite = require('sqlite');
+const sqlite3 = require('sqlite3');
 
 // Running locally in development, so need to bypass corrs
 app.use(function(req, res, next) {
@@ -51,7 +53,11 @@ app.post("/flights", async (req, res) => {
     let dest = req.body.dest;
     let date = req.body.date;
 
+    // Get the flight data from API and parse it into useful values including CO2 emissions
     let flightData = await getFlightData(origin, dest, date);
+
+    // Sort data in ascending order of emissions
+    flightData = sortByEmissions(flightData);
 
     res.send(flightData);
 });
@@ -75,7 +81,6 @@ async function getFlightData(origin, dest, date) {
         })
     .then(function(res){
         let flights = parseFlightsData(res);
-        console.log(flights);
         return flights;
     })
     .catch(function(err) {
@@ -102,29 +107,27 @@ function parseFlightsData(flightsResponse){
         plane = [];
         departure = [];
         arrival = [];
-        for(let j = 0; j < (data[i]["itineraries"]).length; j++) {
-            time = data[i]["itineraries"][j]["duration"];
-            for(let k = 0; k < (data[i]["itineraries"][j]["segments"]).length; k++) {
-                departure.push(data[i]["itineraries"][j]["segments"][k]["departure"]["iataCode"]);
-                arrival.push(data[i]["itineraries"][j]["segments"][k]["arrival"]["iataCode"]);
-                carrier.push(data[i]["itineraries"][j]["segments"][k]["carrierCode"]);
-                plane.push(data[i]["itineraries"][j]["segments"][k]["aircraft"]["code"]);
-            }
+        time = data[i]["itineraries"][0]["duration"];
+        for(let k = 0; k < (data[i]["itineraries"][0]["segments"]).length; k++) {
+            departure.push(data[i]["itineraries"][0]["segments"][k]["departure"]["iataCode"]);
+            arrival.push(data[i]["itineraries"][0]["segments"][k]["arrival"]["iataCode"]);
+            carrier.push(data[i]["itineraries"][0]["segments"][k]["carrierCode"]);
+            plane.push(data[i]["itineraries"][0]["segments"][k]["aircraft"]["code"]);
         }
         const flight = {
-            totalPrice:price,
-            totalDuration:time,
-            carrierCode:carrier,
-            aircraftCode:plane,
-            departureAirportCodes:departure,
-            arrivalAirportCodes:arrival,
-            airports:[],
-            emissions:0,
+            totalPrice:price,                   // Price of flight
+            totalDuration:time,                 // Total duration of flight
+            carrierCode:carrier,                // Airline iata code
+            aircraftCode:plane,                 // Plane iata code
+            departureAirportCodes:departure,    // [] of Airplane iata codes for the departure of each segment trip
+            arrivalAirportCodes:arrival,        // [] of Airplane iata codes for the arrival of each segment trip
+            airports:[],                        // [] of names of airports along route
+            emissions:0,                        // Total emissions in metric tons
         };
+        flight = calculateFlightEmissions(flight);
         //Flights should be an array of json objects
         flights.push(flight);
     }
-    console.log(flights);
     return(flights);
 }
 
@@ -133,25 +136,29 @@ function parseFlightsData(flightsResponse){
  *
  * @param {object} flight object containing data to calculate emissions
  */
-async function calculateFlightEmissions(flight){
+async function calculateFlightEmissions(flight) {
     // Get paramaters from sql data matching flight codes
     let aircrafts = flight.aircraftCode;
     let depart = flight.departureAirportCodes;
     let arrive = flight.arrivalAirportCodes;
-    let totalEmissions;
+    let airports = [], totalEmissions = 0;
 
     // go thorough each segment of the flight
     // (aircrafts, depart, and arrive should all be the same length)
     for (let i = 0; i < aircrafts.length; i++) {
         let db = await getDBConnection("airportcodes.db");
             // SQLite query for name of airport from code
-            let airportName = await db.all("SELECT AP.airportname FROM airportcodes AS AP WHERE AP.abbr = (...);");
-            flights.airports.push(airportName);
+            let airportName = await db.all("SELECT AP.airportname FROM airportcodes AS AP WHERE AP.abbr = ?;", depart[i]);
+            airports.push(airportName[0]["airportname"]);
+            if (i = aircrafts.length - 1) {
+                let airportName = await db.all("SELECT AP.airportname FROM airportcodes AS AP WHERE AP.abbr = ?;", arrive[i]);
+                airports.push(airportName[0]["airportname"]);
+            }
 
             // Get distance between airports for segment
             let arrCoords = await db.all("SELECT AP.latitude, AP.longitude FROM airportcodes AS AP WHERE AP.abbr = ?;", arrive[i]);
             let depCoords = await db.all("SELECT AP.latitude, AP.longitude FROM airportcodes AS AP WHERE AP.abbr = ?;", depart[i]);
-            let dist = getDistanceFromLatLonInKm(aarCoords.latitude, arrCoords.longitude, depCoords.latitude, depCoords.longitude);
+            let dist = getDistanceFromLatLonInKm(arrCoords[0]["latitude"], arrCoords[0]["longitude"], depCoords[0]["latitude"], depCoords[0]["longitude"]);
         db.close();
 
         db = await getDBConnection("aircraftcodes.db");
@@ -161,24 +168,49 @@ async function calculateFlightEmissions(flight){
 
         db = await getDBConnection("aircraftemissions.db");
             // SQLite query for emission rates from aircraft name
-            let aircraftEmissions = await db.all("SELECT E.emissions FROM aircraftemissions AS E WHERE E.aircraftmodel = ?;", aircraftName);
+            let aircraftEmissions = await db.all("SELECT E.emissions FROM aircraftemissions AS E WHERE E.aircraftmodel = ?;", aircraftName[0]["aircraftname"]);
         db.close();
 
+        // add on emissions for this segment in metric tons to the total for the flight
         totalEmissions += emissionsForSegment(dist, aircraftEmissions);
     }
-    // add additional carbon pieces (taxiing, etc.)
-    // update flights with new data (add arrays we created + emissions)
+
+    // add additional carbon pieces (taxiing, runway etc.) in metric tons
+    totalEmissions += 0.53;
+    // update flights with new emissions data (add arrays we created + emissions)
+    flight.emissions = totalEmissions ; // metric tons
+
+    flight.airports = airports;
+
+    return flight;
 }
 
 /**
+ * Calculate emissions for a single leg of the flight in metric tons
  *
- * @param {Integer} distance
- * @param {String} aircraftEmissions
+ * @param {Integer} distance of flight segment in kg
+ * @param {String} aircraftEmissions in kg/km specific to aircraft of segment
+ * @returns {Integer} emissions for the segment in metric tons
  */
 function emissionsForSegment (distance, aircraftEmissions) {
-    // parse aircraft emissions
-    // do *
-    // return
+    let avgEmissionsForModel; //in kg
+    //reformat every array entry
+    for (let i = 0; i < aircraftEmissions.length; i++) {
+        let emissionsString = JSON.stringify(aircraftEmissions[i]["emissions"]);
+        emissionsString = emissionsString.substring(1, emissionsString.indexOf(" "));
+        aircraftEmissions[i] = parseFloat(emissionsString);
+    }
+    if (aircraftEmissions.length == 0) {
+        return distance * 0.00316; // avg fuel burn
+    } else {
+        avgEmissionsForModel = aircraftEmissions.reduce((a, b) => a + b) / aircraftEmissions.length;
+    }
+    //fuel burn rate * distance = amount of fuel consumed
+    // km * kg/km = kg fuel -> metric tons
+    //could divide by average 85% full flight
+    let toTons = avgEmissionsForModel / 1000;
+    let emissions = distance * toTons;
+    return emissions;
 }
 
 async function getDBConnection(database) {
@@ -206,6 +238,24 @@ function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
 
 function deg2rad(deg) {
     return deg * (Math.PI/180)
+}
+
+/**
+ * Sort flights from least to greatest CO2 emissions in metric tons
+ * @param {[]} flights from user's given src to dest on date
+ */
+function sortByEmissions(flights) {
+    // For each flight in flights
+    for (let i = 0; i < flights.length; i++) { // TODO: FIX HERE flights CANNOT HAVE LENGTH
+        // Fo through and compare to other items
+        for (let j = 0; j < flights.length - i - 1; j++) {
+            // If the next is less than the current, swap
+            if (flights[j + 1].emissions < flights[j].emissions) {
+                [flights[j + 1], flights[j]] = [flights[j], flights[j + 1]]
+            }
+        }
+    }
+    return flights;
 }
 
 app.listen(port, () => {
