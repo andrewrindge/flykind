@@ -63,7 +63,7 @@ app.post("/flights", async (req, res) => {
  * @param {String} date of flight request
  */
 async function getFlightData(origin, dest, date) {
-    amadeus.client.get(
+    return await amadeus.client.get(
         '/v2/shopping/flight-offers',
         {
             originLocationCode: origin,
@@ -71,7 +71,6 @@ async function getFlightData(origin, dest, date) {
             departureDate: date,
             adults: '1'
         })
-    // .then(res => res.json())
     .then(function(res){
         let flights = parseFlightsData(res);
         console.log(flights);
@@ -90,13 +89,6 @@ async function getFlightData(origin, dest, date) {
  */
 function parseFlightsData(flightsResponse){
     let data = flightsResponse["data"];
-    // currently this isn't working v
-    let dictionary = flightsResponse["dictionaries"];
-    //console.log(data);
-    //return data;
-
-    // parse the dictionary (in helper funct) to create a single searchable
-    // object with aircrafts and carriers (the only components we should use)
 
     // Create a new object to hold just the data we need
     let price, time, carrier, plane, departure, arrival;
