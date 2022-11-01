@@ -22,11 +22,11 @@ app.use(express.json()); // built-in middleware
 // for multipart/form-data (required with FormData)
 app.use(multer().none()); // requires the "multer" module
 
-// API access
+// API access, hidden API key
 var Amadeus = require('amadeus');
 var amadeus = new Amadeus({
-  clientId: 'WABRJuydfMKFJp5ocr7ew9K5VFdusIjE',
-  clientSecret: 'Km6UQ7AkZBIeihpu'
+  clientId: 'WABRJuydfMKFJp5ocr7ew9K5VFXXXXXX', 
+  clientSecret: 'Km6UQ7AkZBIXXXXX'
 });
 
 // listening on...
